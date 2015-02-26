@@ -16,9 +16,9 @@ _logger = logging.getLogger(__name__)
 
 
 class PaypalController(http.Controller):
-    _notify_url = '/payment/voguepay/ipn/'
-    _return_url = '/payment/voguepay/dpn/'
-    _cancel_url = '/payment/voguepay/cancel/'
+    _notify_url = '/payment/paypal/ipn/'
+    _return_url = '/payment/paypal/dpn/'
+    _cancel_url = '/payment/paypal/cancel/'
 
     def _get_return_url(self, **post):
         """ Extract the return URL from the data coming from paypal. """

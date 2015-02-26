@@ -241,7 +241,7 @@ class TxPaypal(osv.Model):
             'paypal_txn_type': data.get('payment_type'),
             'partner_reference': data.get('payer_id')
         }
-        if status in ['Completed', 'Processed']:
+        if status in ['Approved', 'Processed']:
             _logger.info('Validated Paypal payment for tx %s: set as done' % (tx.reference))
             data.update(state='done', date_validate=data.get('payment_date', fields.datetime.now()))
             return tx.write(data)
