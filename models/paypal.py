@@ -26,13 +26,13 @@ class AcquirerPaypal(osv.Model):
         """ Paypal URLS """
         if environment == 'prod':
             return {
-                'paypal_form_url': 'https://voguepay.com/pay',
-                'paypal_rest_url': 'https://voguepay.com/pay',
+                'paypal_form_url': 'https://www.paypal.com/cgi-bin/webscr',
+                'paypal_rest_url': 'https://api.paypal.com/v1/oauth2/token',
             }
         else:
             return {
-                'paypal_form_url': 'https://voguepay.com/pay',
-                'paypal_rest_url': 'https://voguepay.com/pay',
+                'paypal_form_url': 'https://www.sandbox.paypal.com/cgi-bin/webscr',
+                'paypal_rest_url': 'https://api.sandbox.paypal.com/v1/oauth2/token',
             }
 
     def _get_providers(self, cr, uid, context=None):
@@ -241,7 +241,7 @@ class TxPaypal(osv.Model):
             'paypal_txn_type': data.get('payment_type'),
             'partner_reference': data.get('payer_id')
         }
-        if status in ['Approved', 'Processed']:
+        if status in ['Completed', 'Processed']:
             _logger.info('Validated Paypal payment for tx %s: set as done' % (tx.reference))
             data.update(state='done', date_validate=data.get('payment_date', fields.datetime.now()))
             return tx.write(data)
@@ -345,7 +345,7 @@ class TxPaypal(osv.Model):
             }
         data = json.dumps(data)
 
-        request = urllib2.Request('https://voguepay.com/pay', data, headers)
+        request = urllib2.Request('https://api.sandbox.paypal.com/v1/payments/payment', data, headers)
         result = self._paypal_try_url(request, tries=3, context=context)
         return (tx_id, result)
 
@@ -409,7 +409,7 @@ class TxPaypal(osv.Model):
             'Content-Type': 'application/json',
             'Authorization': 'Bearer %s' % tx.acquirer_id._paypal_s2s_get_access_token()[tx.acquirer_id.id],
         }
-        url = 'https://voguepay.com/pay/%s' % (tx.paypal_txn_id)
+        url = 'https://api.sandbox.paypal.com/v1/payments/payment/%s' % (tx.paypal_txn_id)
         request = urllib2.Request(url, headers=headers)
         data = self._paypal_try_url(request, tries=3, context=context)
         return self.s2s_feedback(cr, uid, tx.id, data, context=context)
