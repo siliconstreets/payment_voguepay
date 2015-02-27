@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 
 {
-    'name': 'Paypal Payment Acquirer',
+    'name': 'VoguePay Payment Acquirer',
     'category': 'Hidden',
-    'summary': 'Payment Acquirer: Paypal Implementation',
+    'summary': 'Payment Acquirer: VoguePay Implementation',
     'version': '1.0',
-    'description': """Paypal Payment Acquirer""",
+    'description': """VoguePay Payment Acquirer""",
     'author': 'OpenERP SA',
     'depends': ['payment'],
     'data': [

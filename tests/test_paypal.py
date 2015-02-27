@@ -2,7 +2,7 @@
 
 from openerp.addons.payment.models.payment_acquirer import ValidationError
 from openerp.addons.payment.tests.common import PaymentAcquirerCommon
-from openerp.addons.payment_paypal.controllers.main import PaypalController
+from openerp.addons.payment_paypal.controllers.main import VoguepayController
 from openerp.tools import mute_logger
 
 from lxml import objectify
@@ -17,7 +17,7 @@ class PaypalCommon(PaymentAcquirerCommon):
         self.base_url = self.registry('ir.config_parameter').get_param(cr, uid, 'web.base.url')
 
         # get the paypal account
-        model, self.paypal_id = self.registry('ir.model.data').get_object_reference(cr, uid, 'payment_paypal', 'payment_acquirer_paypal')
+        model, self.paypal_id = self.registry('ir.model.data').get_object_reference(cr, uid, 'payment_paypal', 'payment_acquirer_voguepay')
         # tde+seller@openerp.com - tde+buyer@openerp.com - tde+buyer-it@openerp.com
 
         # some CC
@@ -61,9 +61,9 @@ class PaypalServer2Server(PaypalCommon):
         )
 
         tx = self.payment_transaction.browse(cr, uid, tx_id, context=context)
-        self.assertTrue(tx.paypal_txn_id is not False, 'paypal: txn_id should have been set after s2s request')
+        self.assertTrue(tx.v_transaction_id is not False, 'paypal: txn_id should have been set after s2s request')
 
-        self.payment_transaction.write(cr, uid, tx_id, {'paypal_txn_id': False}, context=context)
+        self.payment_transaction.write(cr, uid, tx_id, {'v_transaction_id': False}, context=context)
 
 
 class PaypalForm(PaypalCommon):
@@ -101,14 +101,14 @@ class PaypalForm(PaypalCommon):
             'zip': '1000',
             'country': 'Belgium',
             'email': 'norbert.buyer@example.com',
-            'return': '%s' % urlparse.urljoin(self.base_url, PaypalController._return_url),
-            'notify_url': '%s' % urlparse.urljoin(self.base_url, PaypalController._notify_url),
-            'cancel_return': '%s' % urlparse.urljoin(self.base_url, PaypalController._cancel_url),
+            'return': '%s' % urlparse.urljoin(self.base_url, VoguepayController._return_url),
+            'notify_url': '%s' % urlparse.urljoin(self.base_url, VoguepayController._notify_url),
+            'cancel_return': '%s' % urlparse.urljoin(self.base_url, VoguepayController._cancel_url),
         }
 
         # check form result
         tree = objectify.fromstring(res)
-        self.assertEqual(tree.get('action'), 'https://www.sandbox.paypal.com/cgi-bin/webscr', 'paypal: wrong form POST url')
+        self.assertEqual(tree.get('action'), 'https://voguepay.com/images/logo.png', 'paypal: wrong form POST url')
         for form_input in tree.input:
             if form_input.get('name') in ['submit']:
                 continue
@@ -144,7 +144,7 @@ class PaypalForm(PaypalCommon):
         # check form result
         handling_found = False
         tree = objectify.fromstring(res)
-        self.assertEqual(tree.get('action'), 'https://www.sandbox.paypal.com/cgi-bin/webscr', 'paypal: wrong form POST url')
+        self.assertEqual(tree.get('action'), 'https://voguepay.com/images/logo.png', 'paypal: wrong form POST url')
         for form_input in tree.input:
             if form_input.get('name') in ['handling']:
                 handling_found = True
@@ -223,13 +223,13 @@ class PaypalForm(PaypalCommon):
         tx = self.payment_transaction.browse(cr, uid, tx_id, context=context)
         self.assertEqual(tx.state, 'pending', 'paypal: wrong state after receiving a valid pending notification')
         self.assertEqual(tx.state_message, 'multi_currency', 'paypal: wrong state message after receiving a valid pending notification')
-        self.assertEqual(tx.paypal_txn_id, '08D73520KX778924N', 'paypal: wrong txn_id after receiving a valid pending notification')
+        self.assertEqual(tx.v_transaction_id, '08D73520KX778924N', 'paypal: wrong txn_id after receiving a valid pending notification')
         self.assertFalse(tx.date_validate, 'paypal: validation date should not be updated whenr receiving pending notification')
 
         # update tx
         self.payment_transaction.write(cr, uid, [tx_id], {
-            'state': 'draft',
-            'paypal_txn_id': False,
+            'status': 'draft',
+            'v_transaction_id': False,
         }, context=context)
         # update notification from paypal
         paypal_post_data['payment_status'] = 'Completed'
@@ -238,5 +238,5 @@ class PaypalForm(PaypalCommon):
         # check
         tx = self.payment_transaction.browse(cr, uid, tx_id, context=context)
         self.assertEqual(tx.state, 'done', 'paypal: wrong state after receiving a valid pending notification')
-        self.assertEqual(tx.paypal_txn_id, '08D73520KX778924N', 'paypal: wrong txn_id after receiving a valid pending notification')
+        self.assertEqual(tx.v_transaction_id, '08D73520KX778924N', 'paypal: wrong txn_id after receiving a valid pending notification')
         self.assertEqual(tx.date_validate, '2013-11-18 03:21:19', 'paypal: wrong validation date')

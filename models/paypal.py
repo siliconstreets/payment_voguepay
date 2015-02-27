@@ -11,7 +11,7 @@ import werkzeug.urls
 import urllib2
 
 from openerp.addons.payment.models.payment_acquirer import ValidationError
-from openerp.addons.payment_paypal.controllers.main import PaypalController
+from openerp.addons.payment_paypal.controllers.main import VoguepayController
 from openerp.osv import osv, fields
 from openerp.tools.float_utils import float_compare
 from openerp import SUPERUSER_ID
@@ -19,30 +19,30 @@ from openerp import SUPERUSER_ID
 _logger = logging.getLogger(__name__)
 
 
-class AcquirerPaypal(osv.Model):
+class AcquirerVoguepay(osv.Model):
     _inherit = 'payment.acquirer'
 
-    def _get_paypal_urls(self, cr, uid, environment, context=None):
+    def _get_voguepay_urls(self, cr, uid, environment, context=None):
         """ Paypal URLS """
         if environment == 'prod':
             return {
-                'paypal_form_url': 'https://www.paypal.com/cgi-bin/webscr',
-                'paypal_rest_url': 'https://api.paypal.com/v1/oauth2/token',
+                'voguepay_form_url': 'https://voguepay.com/pay',
+                'voguepay_rest_url': 'https://voguepay.com/pay',
             }
         else:
             return {
-                'paypal_form_url': 'https://www.sandbox.paypal.com/cgi-bin/webscr',
-                'paypal_rest_url': 'https://api.sandbox.paypal.com/v1/oauth2/token',
+                'voguepay_form_url': 'https://voguepay.com/pay',
+                'voguepay_rest_url': 'https://voguepay.com/pay',
             }
 
     def _get_providers(self, cr, uid, context=None):
-        providers = super(AcquirerPaypal, self)._get_providers(cr, uid, context=context)
-        providers.append(['paypal', 'Paypal'])
+        providers = super(AcquirerVoguepay, self)._get_providers(cr, uid, context=context)
+        providers.append(['voguepay', 'VoguePay'])
         return providers
 
     _columns = {
-        'paypal_email_account': fields.char('Paypal Email ID', required_if_provider='paypal'),
-        'paypal_seller_account': fields.char(
+        'voguepay_id_account': fields.char('Paypal Email ID', required_if_provider='voguepay'),
+        'voguepay_seller_account': fields.char(
             'Paypal Merchant ID',
             help='The Merchant ID is used to ensure communications coming from Paypal are valid and secured.'),
         'paypal_use_ipn': fields.boolean('Use IPN', help='Paypal Instant Payment Notification'),
@@ -55,7 +55,7 @@ class AcquirerPaypal(osv.Model):
     }
 
     _defaults = {
-        'paypal_use_ipn': True,
+        'paypal_use_ipn': False,
         'fees_active': False,
         'fees_dom_fixed': 0.35,
         'fees_dom_var': 3.4,
@@ -64,21 +64,21 @@ class AcquirerPaypal(osv.Model):
         'paypal_api_enabled': False,
     }
 
-    def _migrate_paypal_account(self, cr, uid, context=None):
+    def _migrate_voguepay_account(self, cr, uid, context=None):
         """ COMPLETE ME """
         cr.execute('SELECT id, paypal_account FROM res_company')
         res = cr.fetchall()
         for (company_id, company_paypal_account) in res:
             if company_paypal_account:
-                company_paypal_ids = self.search(cr, uid, [('company_id', '=', company_id), ('provider', '=', 'paypal')], limit=1, context=context)
+                company_paypal_ids = self.search(cr, uid, [('company_id', '=', company_id), ('provider', '=', 'voguepay')], limit=1, context=context)
                 if company_paypal_ids:
                     self.write(cr, uid, company_paypal_ids, {'paypal_email_account': company_paypal_account}, context=context)
                 else:
-                    paypal_view = self.pool['ir.model.data'].get_object(cr, uid, 'payment_paypal', 'paypal_acquirer_button')
+                    paypal_view = self.pool['ir.model.data'].get_object(cr, uid, 'payment_voguepay', 'voguepay_acquirer_button')
                     self.create(cr, uid, {
-                        'name': 'Paypal',
-                        'provider': 'paypal',
-                        'paypal_email_account': company_paypal_account,
+                        'name': 'VoguePay',
+                        'provider': 'voguepay',
+                        'voguepay_id_account': company_paypal_account,
                         'view_template_id': paypal_view.id,
                     }, context=context)
         return True
@@ -125,9 +125,9 @@ class AcquirerPaypal(osv.Model):
             'zip': partner_values['zip'],
             'first_name': partner_values['first_name'],
             'last_name': partner_values['last_name'],
-            'return': '%s' % urlparse.urljoin(base_url, PaypalController._return_url),
-            'notify_url': '%s' % urlparse.urljoin(base_url, PaypalController._notify_url),
-            'cancel_return': '%s' % urlparse.urljoin(base_url, PaypalController._cancel_url),
+            'return': '%s' % urlparse.urljoin(base_url, VoguepayController._return_url),
+            'notify_url': '%s' % urlparse.urljoin(base_url, VoguepayController._notify_url),
+            'cancel_return': '%s' % urlparse.urljoin(base_url, VoguepayController._cancel_url),
         })
         if acquirer.fees_active:
             paypal_tx_values['handling'] = '%.2f' % paypal_tx_values.pop('fees', 0.0)
@@ -137,7 +137,7 @@ class AcquirerPaypal(osv.Model):
 
     def paypal_get_form_action_url(self, cr, uid, id, context=None):
         acquirer = self.browse(cr, uid, id, context=context)
-        return self._get_paypal_urls(cr, uid, acquirer.environment, context=context)['paypal_form_url']
+        return self._get_voguepay_urls(cr, uid, acquirer.environment, context=context)['voguepay_form_url']
 
     def _paypal_s2s_get_access_token(self, cr, uid, ids, context=None):
         """
@@ -149,7 +149,7 @@ class AcquirerPaypal(osv.Model):
         parameters = werkzeug.url_encode({'grant_type': 'client_credentials'})
 
         for acquirer in self.browse(cr, uid, ids, context=context):
-            tx_url = self._get_paypal_urls(cr, uid, acquirer.environment)['paypal_rest_url']
+            tx_url = self._get_voguepay_urls(cr, uid, acquirer.environment)['voguepay_rest_url']
             request = urllib2.Request(tx_url, parameters)
 
             # add other headers (https://developer.paypal.com/webapps/developer/docs/integration/direct/make-your-first-call/)
@@ -170,11 +170,11 @@ class AcquirerPaypal(osv.Model):
         return res
 
 
-class TxPaypal(osv.Model):
+class TxVoguepay(osv.Model):
     _inherit = 'payment.transaction'
 
     _columns = {
-        'paypal_txn_id': fields.char('Transaction ID'),
+        'v_transaction_id': fields.char('Transaction ID'),
         'paypal_txn_type': fields.char('Transaction type'),
     }
 
@@ -229,8 +229,8 @@ class TxPaypal(osv.Model):
         # check seller
         if data.get('receiver_email') != tx.acquirer_id.paypal_email_account:
             invalid_parameters.append(('receiver_email', data.get('receiver_email'), tx.acquirer_id.paypal_email_account))
-        if data.get('receiver_id') and tx.acquirer_id.paypal_seller_account and data['receiver_id'] != tx.acquirer_id.paypal_seller_account:
-            invalid_parameters.append(('receiver_id', data.get('receiver_id'), tx.acquirer_id.paypal_seller_account))
+        if data.get('receiver_id') and tx.acquirer_id.voguepay_seller_account and data['receiver_id'] != tx.acquirer_id.voguepay_seller_account:
+            invalid_parameters.append(('receiver_id', data.get('receiver_id'), tx.acquirer_id.voguepay_seller_account))
 
         return invalid_parameters
 
@@ -241,7 +241,7 @@ class TxPaypal(osv.Model):
             'paypal_txn_type': data.get('payment_type'),
             'partner_reference': data.get('payer_id')
         }
-        if status in ['Completed', 'Processed']:
+        if status in ['Approved', 'Processed']:
             _logger.info('Validated Paypal payment for tx %s: set as done' % (tx.reference))
             data.update(state='done', date_validate=data.get('payment_date', fields.datetime.now()))
             return tx.write(data)
@@ -345,7 +345,7 @@ class TxPaypal(osv.Model):
             }
         data = json.dumps(data)
 
-        request = urllib2.Request('https://api.sandbox.paypal.com/v1/payments/payment', data, headers)
+        request = urllib2.Request('https://voguepay.com/pay', data, headers)
         result = self._paypal_try_url(request, tries=3, context=context)
         return (tx_id, result)
 
@@ -369,30 +369,30 @@ class TxPaypal(osv.Model):
             release.
         """
         values = json.loads(data)
-        status = values.get('state')
+        status = values.get('status')
         if status in ['approved']:
             _logger.info('Validated Paypal s2s payment for tx %s: set as done' % (tx.reference))
             tx.write({
-                'state': 'done',
+                'status': 'done',
                 'date_validate': values.get('udpate_time', fields.datetime.now()),
-                'paypal_txn_id': values['id'],
+                'v_transaction_id': values['id'],
             })
             return True
         elif status in ['pending', 'expired']:
             _logger.info('Received notification for Paypal s2s payment %s: set as pending' % (tx.reference))
             tx.write({
-                'state': 'pending',
+                'status': 'pending',
                 # 'state_message': data.get('pending_reason', ''),
-                'paypal_txn_id': values['id'],
+                'v_transaction_id': values['id'],
             })
             return True
         else:
             error = 'Received unrecognized status for Paypal s2s payment %s: %s, set as error' % (tx.reference, status)
             _logger.info(error)
             tx.write({
-                'state': 'error',
+                'status': 'error',
                 # 'state_message': error,
-                'paypal_txn_id': values['id'],
+                'v_transaction_id': values['id'],
             })
             return False
 
@@ -404,12 +404,12 @@ class TxPaypal(osv.Model):
             Experimental code. You should not use it before OpenERP v8 official
             release.
         """
-        # TDETODO: check tx.paypal_txn_id is set
+        # TDETODO: check tx.v_transaction_id is set
         headers = {
             'Content-Type': 'application/json',
             'Authorization': 'Bearer %s' % tx.acquirer_id._paypal_s2s_get_access_token()[tx.acquirer_id.id],
         }
-        url = 'https://api.sandbox.paypal.com/v1/payments/payment/%s' % (tx.paypal_txn_id)
+        url = 'https://voguepay.com/pay/%s' % (tx.v_transaction_id)
         request = urllib2.Request(url, headers=headers)
         data = self._paypal_try_url(request, tries=3, context=context)
         return self.s2s_feedback(cr, uid, tx.id, data, context=context)
